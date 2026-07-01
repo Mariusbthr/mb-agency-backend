@@ -1,70 +1,70 @@
-const fs = require('fs');
 const fetch = require('node-fetch');
+const fs = require('fs');
 
-/*
- * Nutzt das offizielle Higgsfield-SDK fuer Node.js (@higgsfield/client).
- * Quelle: https://github.com/higgsfield-ai/higgsfield-js
- *
- * WICHTIG ZUM CREDENTIALS-FORMAT:
- * Higgsfield nutzt teils ein KEY_ID:KEY_SECRET Format, nicht nur einen einzelnen Schluessel.
- * Schau in deinem cloud.higgsfield.ai/api-keys Bereich nach, ob dir beim Erstellen
- * ZWEI Werte angezeigt wurden (eine ID und ein Secret). Falls ja, trage beide
- * durch einen Doppelpunkt getrennt in HIGGSFIELD_CREDENTIALS ein:
- *   HIGGSFIELD_CREDENTIALS=deine-key-id:dein-key-secret
- * Falls dir nur EIN einzelner Wert angezeigt wurde, trage ihn einfach direkt ein
- * (ohne Doppelpunkt).
- *
- * WICHTIG ZUM MODELL-NAMEN:
- * Der exakte Modell-Bezeichner fuer "Bild zu Video" muss noch anhand der
- * Higgsfield-Doku bestaetigt werden (Seite "Generate Videos from Images" in
- * deinem Higgsfield-Doku-Bereich). Ich habe hier den wahrscheinlichsten Wert
- * eingetragen, bitte einmal gegenchecken und ggf. in HIGGSFIELD_MODEL anpassen.
- */
+const HIGGSFIELD_BASE_URL = 'https://platform.higgsfield.ai';
+const HIGGSFIELD_MODEL_ID = process.env.HIGGSFIELD_MODEL_ID || 'higgsfield-ai/dop/standard';
 
-const HIGGSFIELD_MODEL = process.env.HIGGSFIELD_MODEL || 'dop/image-to-video';
-
-let higgsfieldClientPromise = null;
-async function getClient() {
-  if (!higgsfieldClientPromise) {
-    higgsfieldClientPromise = (async () => {
-      const { createHiggsfieldClient } = await import('@higgsfield/client/v2');
-      const credentials = process.env.HIGGSFIELD_CREDENTIALS;
-      if (!credentials) {
-        throw new Error('HIGGSFIELD_CREDENTIALS ist nicht gesetzt. Bitte in .env eintragen.');
-      }
-      return createHiggsfieldClient({ credentials });
-    })();
+function getAuthHeader() {
+  const apiKey = process.env.HIGGSFIELD_API_KEY;
+  const apiSecret = process.env.HIGGSFIELD_API_SECRET;
+  if (!apiKey || !apiSecret) {
+    throw new Error('HIGGSFIELD_API_KEY und HIGGSFIELD_API_SECRET muessen beide in .env gesetzt sein.');
   }
-  return higgsfieldClientPromise;
+  return `Key ${apiKey}:${apiSecret}`;
 }
 
-/**
- * Kompletter Ablauf: oeffentliche Bild-URL + Prompt -> fertiges Video wird lokal gespeichert.
- * @param {string} imageUrl - oeffentlich erreichbare URL des Quellbilds (siehe /files Route in index.js)
- * @param {string} prompt - von Claude generierter Reel-Prompt
- * @param {string} destPath - lokaler Zielpfad, wohin das fertige Video gespeichert wird
- */
-async function generateVideo(imageUrl, prompt, destPath) {
-  const client = await getClient();
-
-  const jobSet = await client.subscribe(HIGGSFIELD_MODEL, {
-    input: {
-      image_url: imageUrl,
-      prompt,
-      // TODO: je nach Higgsfield-Doku ggf. noch aspect_ratio: '9:16' fuer Reels ergaenzen
+async function submitRequest(imageUrl, prompt) {
+  const response = await fetch(`${HIGGSFIELD_BASE_URL}/${HIGGSFIELD_MODEL_ID}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: getAuthHeader(),
     },
-    withPolling: true, // wartet automatisch, bis das Video fertig ist
+    body: JSON.stringify({
+      prompt,
+      image_url: imageUrl,
+      aspect_ratio: '9:16',
+      resolution: '720p',
+    }),
   });
 
-  if (!jobSet.isCompleted) {
-    throw new Error('Higgsfield-Generierung war nicht erfolgreich (Job nicht abgeschlossen).');
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Higgsfield submitRequest Fehler: ${response.status} ${text}`);
   }
 
-  // TODO: Feldname pruefen - je nach SDK-Version kann das Ergebnis-Objekt
-  // anders benannt sein (z.B. jobSet.jobs[0].results?.video?.url)
-  const videoUrl = jobSet.jobs?.[0]?.results?.raw?.url || jobSet.jobs?.[0]?.results?.video?.url;
+  const data = await response.json();
+  return data.request_id;
+}
+
+async function pollStatus(requestId, { intervalMs = 5000, timeoutMs = 5 * 60 * 1000 } = {}) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const response = await fetch(`${HIGGSFIELD_BASE_URL}/requests/${requestId}/status`, {
+      headers: { Authorization: getAuthHeader() },
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Higgsfield pollStatus Fehler: ${response.status} ${text}`);
+    }
+    const data = await response.json();
+
+    if (data.status === 'completed') {
+      return data.video?.url;
+    }
+    if (data.status === 'failed' || data.status === 'nsfw') {
+      throw new Error(`Higgsfield Anfrage nicht erfolgreich: Status "${data.status}"`);
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  throw new Error('Higgsfield Anfrage hat das Zeitlimit ueberschritten.');
+}
+
+async function generateVideo(imageUrl, prompt, destPath) {
+  const requestId = await submitRequest(imageUrl, prompt);
+  const videoUrl = await pollStatus(requestId);
   if (!videoUrl) {
-    throw new Error('Konnte keine Video-URL aus der Higgsfield-Antwort lesen. Bitte Antwortstruktur pruefen.');
+    throw new Error('Konnte keine Video-URL aus der Higgsfield-Antwort lesen.');
   }
 
   const response = await fetch(videoUrl);
