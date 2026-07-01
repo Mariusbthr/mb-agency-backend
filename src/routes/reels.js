@@ -10,6 +10,25 @@ const { generateVideo } = require('../services/higgsfield');
 const router = express.Router();
 const UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads');
 
+const TREND_STYLES = [
+  `- POV/erste-Person-Gefuehl: Kamera wirkt wie die eigenen Augen der Person, immersiv statt gestellt
+- Ruhige, aesthetische "Mood-Board"-Stimmung: sanftes Licht, natuerliche Bewegung
+- Subtile Kamera-Drift wirkt hochwertiger als harte Schnitte`,
+  `- Aesthetic-Lifestyle-Stil: warmes, goldenes Licht (goldene Stunde), traumhafte Atmosphaere
+- Leichte, schwebende Kamerabewegung, fast wie ein Blick durch ein Fenster
+- Fokus auf Textur: Haare, Stoff, Licht-Schatten-Spiel im Vordergrund`,
+  `- GRWM-Stil (Get Ready With Me): nahbar, direkt, wie ein ehrlicher Moment eingefangen
+- Kamera bleibt ruhig und nah, wirkt wie ein Spiegel-Moment
+- Natuerliche Mimik im Fokus: Blinzeln, kleines Laecheln, entspannte Praesenz`,
+  `- Editorial/Hochglanz-Stil: elegante, kontrollierte Kamerafahrt wie in einer Kampagne
+- Kuehleres, kontrastreiches Licht, klare Konturen
+- Minimale, praezise Bewegung statt vieler kleiner Details`,
+];
+
+function pickRandomTrendStyle() {
+  return TREND_STYLES[Math.floor(Math.random() * TREND_STYLES.length)];
+}
+
 router.post('/:creatorId/generate', requireAuth, async (req, res) => {
   const { creatorId } = req.params;
   const { imageId, trendContext } = req.body;
@@ -29,12 +48,7 @@ router.post('/:creatorId/generate', requireAuth, async (req, res) => {
 
   try {
     const prompt = await generateReelConcept(
-      trendContext ||
-        `- POV/erste-Person-Gefuehl: Kamera wirkt wie die eigenen Augen der Person, immersiv statt gestellt
-- Ruhige, aesthetische "Mood-Board"-Stimmung statt Handlung: sanftes Licht, natuerliche Bewegung
-- Erste 2-3 Sekunden entscheiden ueber Verweildauer: visuell sofort ansprechend, kein Aufbau noetig
-- Subtile Kamera-Drift oder leichter Zoom wirkt hochwertiger als harte Schnitte
-- Natuerlich wirkende Mimik/Bewegung (Blinzeln, leichtes Laecheln, Haare im Wind) statt gestellter Pose`,
+      trendContext || pickRandomTrendStyle(),
       creator.name
     );
 
