@@ -10,7 +10,6 @@ const { generateVideo } = require('../services/higgsfield');
 const router = express.Router();
 const UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads');
 
-// Reel aus einem Bild generieren
 router.post('/:creatorId/generate', requireAuth, async (req, res) => {
   const { creatorId } = req.params;
   const { imageId, trendContext } = req.body;
@@ -26,17 +25,19 @@ router.post('/:creatorId/generate', requireAuth, async (req, res) => {
     `INSERT INTO reels (id, creator_id, source_image_id, requested_by, status) VALUES (?, ?, ?, ?, 'GENERATING')`
   ).run(reelId, creatorId, imageId, req.user.id);
 
-  // Direkt antworten, Generierung laeuft im Hintergrund weiter (kann 1-3 Minuten dauern)
   res.json({ id: reelId, status: 'GENERATING' });
 
   try {
     const prompt = await generateReelConcept(
-      trendContext || 'Aktuelle allgemeine Social-Media-Trends, kurze dynamische Reels mit starkem Hook in den ersten 2 Sekunden.',
+      trendContext ||
+        `- POV/erste-Person-Gefuehl: Kamera wirkt wie die eigenen Augen der Person, immersiv statt gestellt
+- Ruhige, aesthetische "Mood-Board"-Stimmung statt Handlung: sanftes Licht, natuerliche Bewegung
+- Erste 2-3 Sekunden entscheiden ueber Verweildauer: visuell sofort ansprechend, kein Aufbau noetig
+- Subtile Kamera-Drift oder leichter Zoom wirkt hochwertiger als harte Schnitte
+- Natuerlich wirkende Mimik/Bewegung (Blinzeln, leichtes Laecheln, Haare im Wind) statt gestellter Pose`,
       creator.name
     );
 
-    // Higgsfield braucht eine oeffentlich erreichbare Bild-URL, keinen Datei-Upload.
-    // PUBLIC_BASE_URL muss auf deine Render-Adresse zeigen, z.B. https://mb-agency-backend.onrender.com
     const publicBaseUrl = process.env.PUBLIC_BASE_URL;
     if (!publicBaseUrl) {
       throw new Error('PUBLIC_BASE_URL ist nicht gesetzt. Bitte in den Environment Variables eintragen.');
@@ -61,7 +62,6 @@ router.post('/:creatorId/generate', requireAuth, async (req, res) => {
   }
 });
 
-// Alle Reels eines Creators auflisten (neueste zuerst), inkl. Zeitstempel
 router.get('/:creatorId', requireAuth, (req, res) => {
   const reels = db
     .prepare(`SELECT * FROM reels WHERE creator_id = ? ORDER BY created_at DESC`)
@@ -69,7 +69,6 @@ router.get('/:creatorId', requireAuth, (req, res) => {
   res.json(reels);
 });
 
-// Einzelnes Reel-Video herunterladen
 router.get('/:creatorId/:reelId/download', requireAuth, (req, res) => {
   const reel = db.prepare(`SELECT * FROM reels WHERE id = ? AND creator_id = ?`).get(req.params.reelId, req.params.creatorId);
   if (!reel || reel.status !== 'DONE' || !reel.file_path) {
