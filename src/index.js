@@ -13,6 +13,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Higgsfield braucht eine oeffentlich erreichbare Bild-URL (kein Datei-Upload).
+// Deshalb stellen wir den uploads-Ordner als statische Dateien bereit.
+const path = require('path');
+app.use('/files', express.static(path.join(__dirname, '..', 'uploads')));
+
 app.get('/', (req, res) => {
   res.json({ ok: true, agency: process.env.AGENCY_NAME || 'MB Agency' });
 });

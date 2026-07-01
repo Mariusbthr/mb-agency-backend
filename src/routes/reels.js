@@ -35,12 +35,19 @@ router.post('/:creatorId/generate', requireAuth, async (req, res) => {
       creator.name
     );
 
-    const imageFullPath = path.join(UPLOAD_ROOT, image.file_path);
+    // Higgsfield braucht eine oeffentlich erreichbare Bild-URL, keinen Datei-Upload.
+    // PUBLIC_BASE_URL muss auf deine Render-Adresse zeigen, z.B. https://mb-agency-backend.onrender.com
+    const publicBaseUrl = process.env.PUBLIC_BASE_URL;
+    if (!publicBaseUrl) {
+      throw new Error('PUBLIC_BASE_URL ist nicht gesetzt. Bitte in den Environment Variables eintragen.');
+    }
+    const imageUrl = `${publicBaseUrl.replace(/\/$/, '')}/files/${image.file_path}`;
+
     const reelDir = path.join(UPLOAD_ROOT, creatorId, 'reels');
     fs.mkdirSync(reelDir, { recursive: true });
     const destPath = path.join(reelDir, `${Date.now()}-${reelId}.mp4`);
 
-    await generateVideo(imageFullPath, prompt, destPath);
+    await generateVideo(imageUrl, prompt, destPath);
 
     const relativePath = path.relative(UPLOAD_ROOT, destPath);
     db.prepare(
