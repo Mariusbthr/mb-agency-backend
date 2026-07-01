@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 
-require('./db'); // stellt sicher, dass die Datenbank+Tabellen beim Start existieren
+require('./db');
 
 const authRoutes = require('./routes/auth');
 const creatorRoutes = require('./routes/creators');
@@ -13,10 +13,9 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Higgsfield braucht eine oeffentlich erreichbare Bild-URL (kein Datei-Upload).
-// Deshalb stellen wir den uploads-Ordner als statische Dateien bereit.
 const path = require('path');
-app.use('/files', express.static(path.join(__dirname, '..', 'uploads')));
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..');
+app.use('/files', express.static(path.join(DATA_DIR, 'uploads')));
 
 app.get('/', (req, res) => {
   res.json({ ok: true, agency: process.env.AGENCY_NAME || 'MB Agency' });
@@ -24,8 +23,8 @@ app.get('/', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/creators', creatorRoutes);
-app.use('/creators', imageRoutes); // /creators/:creatorId/images
-app.use('/reels', reelRoutes); // /reels/:creatorId/...
+app.use('/creators', imageRoutes);
+app.use('/reels', reelRoutes);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
