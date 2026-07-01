@@ -8,7 +8,8 @@ const { generateReelConcept } = require('../services/claude');
 const { generateVideo } = require('../services/higgsfield');
 
 const router = express.Router();
-const UPLOAD_ROOT = path.join(__dirname, '..', '..', 'uploads');
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..');
+const UPLOAD_ROOT = path.join(DATA_DIR, 'uploads');
 
 const TREND_STYLES = [
   `- POV/erste-Person-Gefuehl: Kamera wirkt wie die eigenen Augen der Person, immersiv statt gestellt
