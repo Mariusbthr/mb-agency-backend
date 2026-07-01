@@ -3,33 +3,37 @@ const fetch = require('node-fetch');
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 
-/**
- * Fragt Claude nach einem kurzen, plattformkonformen Reel-Konzept
- * (Hook, Schnitt-Idee, Text-Overlay) basierend auf einem Trend-Kontext.
- * Wichtig: Erzeugt bewusst NICHT-explizite, plattformkonforme Konzepte.
- *
- * @param {string} trendContext - kurze Beschreibung aktueller Trends (manuell gepflegt oder recherchiert)
- * @param {string} creatorName - Name des Creators, fuer Kontext
- * @returns {Promise<string>} - fertiger Prompt-Text fuer Higgsfield
- */
 async function generateReelConcept(trendContext, creatorName) {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY ist nicht gesetzt. Bitte in .env eintragen.');
   }
 
   const systemPrompt = `Du hilfst einer Social-Media-Agentur dabei, aus einem Bild eines Creators ein
-kurzes, plattformkonformes Instagram/TikTok-Reel-Konzept zu erstellen.
-Regeln:
+kurzes, plattformkonformes Instagram/TikTok-Reel-Konzept fuer ein Image-to-Video-Tool zu erstellen.
+
+Wichtige Regeln:
 - Kein sexueller oder stark sexualisierter Inhalt.
-- Fokus auf Trends, Ästhetik, Hooks, Schnitttempo, Text-Overlays.
-- Antworte NUR mit dem fertigen Prompt-Text fuer ein Image-to-Video-Tool, keine Erklaerungen.`;
+- KEIN Text-Overlay im Video anfordern - aktuelle KI-Video-Modelle koennen Text nicht
+  zuverlaessig sauber rendern, das fuehrt zu unlesbarem/verzerrtem Text im Bild.
+  Text-Overlays werden spaeter separat in der Videobearbeitung hinzugefuegt, nicht hier.
+- NUR einfache, physikalisch plausible Bewegungen anfordern (z.B. sanftes Kopfdrehen,
+  natuerliches Blinzeln/Laecheln, leichte Kamerafahrt, Haare/Stoff die sich im Wind bewegen).
+  KEINE komplexen Handlungen (z.B. "steht auf", "faehrt mit dem Stuhl", "geht durch den Raum")
+  anfordern - das fuehrt bei aktuellen Video-Modellen zuverlaessig zu unlogischen,
+  unrealistisch wirkenden Ergebnissen.
+- Orientiere dich an den mitgegebenen aktuellen Trend-Mustern (siehe Trend-Kontext), aber
+  uebersetze sie in reine Bild-Bewegung, nicht in Handlung.
+- Antworte NUR mit dem fertigen Prompt-Text fuer das Image-to-Video-Tool, keine Erklaerungen,
+  keine Anfuehrungszeichen drumherum.`;
 
   const userPrompt = `Creator: ${creatorName}
-Aktueller Trend-Kontext: ${trendContext}
+Aktuelle Trend-Muster (Juli 2026, Instagram/TikTok, weibliche Creator):
+${trendContext}
 
-Erstelle einen kurzen, praezisen Prompt (max. 4-5 Saetze) fuer ein Image-to-Video-Tool,
-der aus dem Bild ein trendiges, virales Reel macht. Beschreibe Kamerabewegung, Stimmung,
-Schnitttempo und eine Idee fuer Text-Overlay.`;
+Erstelle einen kurzen, praezisen Prompt (max. 3-4 Saetze) fuer ein Image-to-Video-Tool,
+der aus dem Bild ein ruhiges, aesthetisches, natuerlich wirkendes Reel macht - im Stil der
+oben genannten Trends. Beschreibe NUR: Kamerabewegung (subtil), Licht/Stimmung, und eine
+minimale natuerliche Bewegung der Person (kein Text, keine komplexe Handlung).`;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -40,7 +44,7 @@ Schnitttempo und eine Idee fuer Text-Overlay.`;
     },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
-      max_tokens: 400,
+      max_tokens: 300,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
     }),
