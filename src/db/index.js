@@ -1,12 +1,18 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
+// Wenn DATA_DIR gesetzt ist (z.B. auf Render's Persistent Disk Mount-Pfad),
+// liegt die Datenbank dort - ueberlebt dann Neustarts/Deploys.
+// Ohne DATA_DIR (z.B. lokal auf deinem Rechner) bleibt es wie bisher.
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..');
 const dbPath = path.join(DATA_DIR, 'data.sqlite');
 const db = new Database(dbPath);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+
+// --- Schema ---
+// Wird beim Serverstart automatisch angelegt, falls noch nicht vorhanden.
 
 db.exec(`
 CREATE TABLE IF NOT EXISTS users (
@@ -54,6 +60,8 @@ CREATE TABLE IF NOT EXISTS reels (
 );
 `);
 
+// Migration: "downloaded"-Spalte nachtraeglich hinzufuegen, falls sie noch
+// nicht existiert (fuer bereits bestehende Datenbanken).
 try {
   db.exec(`ALTER TABLE reels ADD COLUMN downloaded INTEGER NOT NULL DEFAULT 0`);
 } catch (e) {

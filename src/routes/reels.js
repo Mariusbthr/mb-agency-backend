@@ -11,6 +11,11 @@ const router = express.Router();
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..');
 const UPLOAD_ROOT = path.join(DATA_DIR, 'uploads');
 
+// Mehrere Trend-Stile, zwischen denen automatisch abgewechselt wird. Wichtig:
+// Diese unterscheiden sich nicht nur im Licht/Look, sondern bewusst auch im
+// TEMPO der Bewegung - sonst wirken alle Reels trotz Zufallsauswahl gleich "slow motion".
+// WICHTIG: Diese Liste sollte alle paar Wochen manuell aktualisiert werden, damit
+// sie echte aktuelle Trends widerspiegelt (siehe Erklaerung im Chat).
 const TREND_STYLES = [
   `- POV/erste-Person-Gefuehl, MITTLERES Tempo: Kamera wirkt wie die eigenen Augen der Person
 - Spuerbare, aber kontrollierte Kamerabewegung (kein Zeitlupen-Gefuehl, aber auch nicht hektisch)
@@ -30,6 +35,7 @@ function pickRandomTrendStyle() {
   return TREND_STYLES[Math.floor(Math.random() * TREND_STYLES.length)];
 }
 
+// Reel aus einem Bild generieren
 router.post('/:creatorId/generate', requireAuth, async (req, res) => {
   const { creatorId } = req.params;
   const { imageId, trendContext } = req.body;
@@ -45,6 +51,7 @@ router.post('/:creatorId/generate', requireAuth, async (req, res) => {
     `INSERT INTO reels (id, creator_id, source_image_id, requested_by, status) VALUES (?, ?, ?, ?, 'GENERATING')`
   ).run(reelId, creatorId, imageId, req.user.id);
 
+  // Direkt antworten, Generierung laeuft im Hintergrund weiter (kann 1-3 Minuten dauern)
   res.json({ id: reelId, status: 'GENERATING' });
 
   try {
@@ -53,6 +60,8 @@ router.post('/:creatorId/generate', requireAuth, async (req, res) => {
       creator.name
     );
 
+    // Higgsfield braucht eine oeffentlich erreichbare Bild-URL, keinen Datei-Upload.
+    // PUBLIC_BASE_URL muss auf deine Render-Adresse zeigen, z.B. https://mb-agency-backend.onrender.com
     const publicBaseUrl = process.env.PUBLIC_BASE_URL;
     if (!publicBaseUrl) {
       throw new Error('PUBLIC_BASE_URL ist nicht gesetzt. Bitte in den Environment Variables eintragen.');
@@ -77,6 +86,7 @@ router.post('/:creatorId/generate', requireAuth, async (req, res) => {
   }
 });
 
+// Alle Reels eines Creators auflisten (neueste zuerst), inkl. Zeitstempel
 router.get('/:creatorId', requireAuth, (req, res) => {
   const reels = db
     .prepare(`SELECT * FROM reels WHERE creator_id = ? ORDER BY created_at DESC`)
@@ -84,5 +94,43 @@ router.get('/:creatorId', requireAuth, (req, res) => {
   res.json(reels);
 });
 
+// Einzelnes Reel-Video herunterladen
 router.get('/:creatorId/:reelId/download', requireAuth, (req, res) => {
-  const reel = db.prepare(
+  const reel = db.prepare(`SELECT * FROM reels WHERE id = ? AND creator_id = ?`).get(req.params.reelId, req.params.creatorId);
+  if (!reel || reel.status !== 'DONE' || !reel.file_path) {
+    return res.status(404).json({ error: 'Reel noch nicht fertig oder nicht gefunden.' });
+  }
+  db.prepare(`UPDATE reels SET downloaded = 1 WHERE id = ?`).run(reel.id);
+  const fullPath = path.join(UPLOAD_ROOT, reel.file_path);
+  res.download(fullPath);
+});
+
+// Download-Status manuell setzen/umschalten (z.B. falls jemand es woanders
+// heruntergeladen hat oder die Markierung zuruecksetzen will)
+router.patch('/:creatorId/:reelId/downloaded', requireAuth, (req, res) => {
+  const { downloaded } = req.body;
+  const reel = db.prepare(`SELECT * FROM reels WHERE id = ? AND creator_id = ?`).get(req.params.reelId, req.params.creatorId);
+  if (!reel) return res.status(404).json({ error: 'Reel nicht gefunden.' });
+
+  db.prepare(`UPDATE reels SET downloaded = ? WHERE id = ?`).run(downloaded ? 1 : 0, reel.id);
+  res.json({ ok: true, downloaded: Boolean(downloaded) });
+});
+
+// Reel loeschen (nur Owner) - loescht die Datei UND den Datenbank-Eintrag,
+// damit tatsaechlich Speicherplatz frei wird
+router.delete('/:creatorId/:reelId', requireAuth, requireOwner, (req, res) => {
+  const reel = db.prepare(`SELECT * FROM reels WHERE id = ? AND creator_id = ?`).get(req.params.reelId, req.params.creatorId);
+  if (!reel) return res.status(404).json({ error: 'Reel nicht gefunden.' });
+
+  if (reel.file_path) {
+    const fullPath = path.join(UPLOAD_ROOT, reel.file_path);
+    fs.unlink(fullPath, (err) => {
+      if (err && err.code !== 'ENOENT') console.error('Konnte Reel-Datei nicht loeschen:', err);
+    });
+  }
+
+  db.prepare(`DELETE FROM reels WHERE id = ?`).run(reel.id);
+  res.json({ ok: true });
+});
+
+module.exports = router;

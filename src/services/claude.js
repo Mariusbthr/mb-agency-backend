@@ -3,6 +3,16 @@ const fetch = require('node-fetch');
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 
+/**
+ * Fragt Claude nach einem kurzen, plattformkonformen Reel-Konzept
+ * (Kamerabewegung, Stimmung, Schnitttempo - KEIN Text-Overlay) basierend
+ * auf einem Trend-Kontext.
+ * Wichtig: Erzeugt bewusst NICHT-explizite, plattformkonforme Konzepte.
+ *
+ * @param {string} trendContext - kurze Beschreibung aktueller Trends (siehe reels.js fuer Default)
+ * @param {string} creatorName - Name des Creators, fuer Kontext
+ * @returns {Promise<string>} - fertiger Prompt-Text fuer Higgsfield
+ */
 async function generateReelConcept(trendContext, creatorName) {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY ist nicht gesetzt. Bitte in .env eintragen.');
