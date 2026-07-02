@@ -54,4 +54,10 @@ CREATE TABLE IF NOT EXISTS reels (
 );
 `);
 
+try {
+  db.exec(`ALTER TABLE reels ADD COLUMN downloaded INTEGER NOT NULL DEFAULT 0`);
+} catch (e) {
+  // Spalte existiert schon - kein Problem, einfach ignorieren
+}
+
 module.exports = db;
