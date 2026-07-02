@@ -4,20 +4,18 @@ const fs = require('fs');
 const HIGGSFIELD_BASE_URL = 'https://platform.higgsfield.ai';
 
 const MODEL_POOL = [
-  'higgsfield-ai/dop/preview',
-  'bytedance/seedance/v1/pro/image-to-video',
-  'kling-video/v2.1/pro/image-to-video',
+  { id: 'higgsfield-ai/dop/standard', durations: [3, 5, 10, 15] },
+  { id: 'higgsfield-ai/dop/turbo', durations: [3, 5, 10, 15] },
+  { id: 'kling-video/v2.1/pro/image-to-video', durations: [5, 10] },
 ];
 
-const DURATION_POOL = [3, 5, 10, 15];
-
-function pickModel() {
-  if (process.env.HIGGSFIELD_MODEL_ID) return process.env.HIGGSFIELD_MODEL_ID;
-  return MODEL_POOL[Math.floor(Math.random() * MODEL_POOL.length)];
-}
-
-function pickDuration() {
-  return DURATION_POOL[Math.floor(Math.random() * DURATION_POOL.length)];
+function pickModelAndDuration() {
+  if (process.env.HIGGSFIELD_MODEL_ID) {
+    return { modelId: process.env.HIGGSFIELD_MODEL_ID, duration: 5 };
+  }
+  const choice = MODEL_POOL[Math.floor(Math.random() * MODEL_POOL.length)];
+  const duration = choice.durations[Math.floor(Math.random() * choice.durations.length)];
+  return { modelId: choice.id, duration };
 }
 
 function getAuthHeader() {
@@ -81,30 +79,4 @@ async function pollStatus(requestId, { intervalMs = 5000, timeoutMs = 12 * 60 * 
         null
       );
     }
-    if (data.status === 'failed' || data.status === 'nsfw') {
-      throw new Error(`Higgsfield Anfrage nicht erfolgreich: Status "${data.status}"`);
-    }
-    await new Promise((r) => setTimeout(r, intervalMs));
-  }
-  throw new Error('Higgsfield Anfrage hat das Zeitlimit ueberschritten.');
-}
-
-async function generateVideo(imageUrl, prompt, destPath) {
-  const modelId = pickModel();
-  const duration = pickDuration();
-
-  const requestId = await submitRequest(imageUrl, prompt, modelId, duration);
-  const videoUrl = await pollStatus(requestId);
-  if (!videoUrl) {
-    throw new Error('Konnte keine Video-URL aus der Higgsfield-Antwort lesen.');
-  }
-
-  const response = await fetch(videoUrl);
-  if (!response.ok) throw new Error(`Video-Download fehlgeschlagen: ${response.status}`);
-  const buffer = await response.buffer();
-  fs.writeFileSync(destPath, buffer);
-
-  return destPath;
-}
-
-module.exports = { generateVideo };
+    if (data.status ===
