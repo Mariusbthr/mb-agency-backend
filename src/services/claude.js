@@ -32,12 +32,18 @@ Wichtige Regeln:
 Aktuelle Trend-Muster (Juli 2026, Instagram/TikTok, weibliche Creator):
 ${trendContext}
 
-Erstelle einen kurzen, praezisen Prompt (max. 3-4 Saetze) fuer ein Image-to-Video-Tool,
-der aus dem Bild ein aesthetisches, natuerlich wirkendes Reel macht - GENAU im Tempo und
-Stil, der oben im Trend-Muster beschrieben ist (das kann ruhig ODER zuegig/energiegeladen
-sein, je nachdem was oben steht - erzwinge NICHT automatisch Ruhe/Langsamkeit). Beschreibe
-NUR: Kamerabewegung (im vorgegebenen Tempo), Licht/Stimmung, und eine natuerliche Bewegung
-der Person passend zum Tempo (kein Text, keine komplexe Handlung).`;
+Erstelle einen kurzen, praezisen englischen Prompt (max. 2-3 Saetze) fuer ein
+Image-to-Video-Tool, GENAU im Tempo/Stil des obigen Trend-Musters.
+
+WICHTIG - nutze aktiv diese Steuerung (laut Tool-Doku entscheidend fuers Ergebnis):
+- Tempo-Wort einbauen je nach Trend oben: "slowly" / "smoothly" (ruhig) ODER
+  "quickly" / "energetically" / "dynamically" (zuegig). Erzwinge NICHT automatisch "slowly".
+- Konkrete Kamerabewegung nennen und variieren: z.B. "camera pans left", "zooms in",
+  "orbits around", "quick push-in" - waehle passend zum Trend, nicht immer dieselbe.
+- Eine natuerliche Bewegung der Person passend zum Tempo (kein Text-Overlay, keine
+  komplexe Handlung wie aufstehen/gehen).
+
+Antworte NUR mit dem fertigen englischen Prompt, ohne Anfuehrungszeichen, ohne Erklaerung.`;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
