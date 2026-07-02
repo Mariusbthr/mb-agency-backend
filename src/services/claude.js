@@ -16,11 +16,13 @@ Wichtige Regeln:
 - KEIN Text-Overlay im Video anfordern - aktuelle KI-Video-Modelle koennen Text nicht
   zuverlaessig sauber rendern, das fuehrt zu unlesbarem/verzerrtem Text im Bild.
   Text-Overlays werden spaeter separat in der Videobearbeitung hinzugefuegt, nicht hier.
-- NUR einfache, physikalisch plausible Bewegungen anfordern (z.B. sanftes Kopfdrehen,
-  natuerliches Blinzeln/Laecheln, leichte Kamerafahrt, Haare/Stoff die sich im Wind bewegen).
+- NUR einfache, physikalisch plausible Bewegungen anfordern (z.B. Kopfdrehen, Blinzeln,
+  Laecheln, Kamerafahrt, Haare/Stoff die sich bewegen) - das TEMPO dieser Bewegungen darf
+  aber je nach vorgegebenem Trend-Stil stark variieren (ruhig UND zuegig/energiegeladen sind
+  beide erlaubt, "physikalisch plausibel" heisst NICHT automatisch "langsam").
   KEINE komplexen Handlungen (z.B. "steht auf", "faehrt mit dem Stuhl", "geht durch den Raum")
   anfordern - das fuehrt bei aktuellen Video-Modellen zuverlaessig zu unlogischen,
-  unrealistisch wirkenden Ergebnissen.
+  unrealistisch wirkenden Ergebnissen. Das gilt unabhaengig vom Tempo.
 - Orientiere dich an den mitgegebenen aktuellen Trend-Mustern (siehe Trend-Kontext), aber
   uebersetze sie in reine Bild-Bewegung, nicht in Handlung.
 - Antworte NUR mit dem fertigen Prompt-Text fuer das Image-to-Video-Tool, keine Erklaerungen,
@@ -31,9 +33,11 @@ Aktuelle Trend-Muster (Juli 2026, Instagram/TikTok, weibliche Creator):
 ${trendContext}
 
 Erstelle einen kurzen, praezisen Prompt (max. 3-4 Saetze) fuer ein Image-to-Video-Tool,
-der aus dem Bild ein ruhiges, aesthetisches, natuerlich wirkendes Reel macht - im Stil der
-oben genannten Trends. Beschreibe NUR: Kamerabewegung (subtil), Licht/Stimmung, und eine
-minimale natuerliche Bewegung der Person (kein Text, keine komplexe Handlung).`;
+der aus dem Bild ein aesthetisches, natuerlich wirkendes Reel macht - GENAU im Tempo und
+Stil, der oben im Trend-Muster beschrieben ist (das kann ruhig ODER zuegig/energiegeladen
+sein, je nachdem was oben steht - erzwinge NICHT automatisch Ruhe/Langsamkeit). Beschreibe
+NUR: Kamerabewegung (im vorgegebenen Tempo), Licht/Stimmung, und eine natuerliche Bewegung
+der Person passend zum Tempo (kein Text, keine komplexe Handlung).`;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
