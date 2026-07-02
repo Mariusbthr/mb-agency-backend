@@ -12,18 +12,18 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..');
 const UPLOAD_ROOT = path.join(DATA_DIR, 'uploads');
 
 const TREND_STYLES = [
-  `- POV/erste-Person-Gefuehl: Kamera wirkt wie die eigenen Augen der Person, immersiv statt gestellt
-- Ruhige, aesthetische "Mood-Board"-Stimmung: sanftes Licht, natuerliche Bewegung
-- Subtile Kamera-Drift wirkt hochwertiger als harte Schnitte`,
-  `- Aesthetic-Lifestyle-Stil: warmes, goldenes Licht (goldene Stunde), traumhafte Atmosphaere
-- Leichte, schwebende Kamerabewegung, fast wie ein Blick durch ein Fenster
-- Fokus auf Textur: Haare, Stoff, Licht-Schatten-Spiel im Vordergrund`,
-  `- GRWM-Stil (Get Ready With Me): nahbar, direkt, wie ein ehrlicher Moment eingefangen
-- Kamera bleibt ruhig und nah, wirkt wie ein Spiegel-Moment
-- Natuerliche Mimik im Fokus: Blinzeln, kleines Laecheln, entspannte Praesenz`,
-  `- Editorial/Hochglanz-Stil: elegante, kontrollierte Kamerafahrt wie in einer Kampagne
-- Kuehleres, kontrastreiches Licht, klare Konturen
-- Minimale, praezise Bewegung statt vieler kleiner Details`,
+  `- POV/erste-Person-Gefuehl, MITTLERES Tempo: Kamera wirkt wie die eigenen Augen der Person
+- Spuerbare, aber kontrollierte Kamerabewegung (kein Zeitlupen-Gefuehl, aber auch nicht hektisch)
+- Subtile Kamera-Drift mit klar wahrnehmbarem Vorwaertstempo`,
+  `- Energiegeladener Trend-Stil, SCHNELLES Tempo: knackige, zuegige Bewegung, kein traeges Driften
+- Schneller Zoom oder leichter Handheld-Wackler, wie ein spontan eingefangener Moment
+- Zuegiger Haarschwung oder schnelles Kopfdrehen, Energie und Tempo klar spuerbar - explizit KEINE Zeitlupe`,
+  `- GRWM-Stil (Get Ready With Me), MITTLERES bis ZUEGIGES Tempo: nahbar, direkt, lebendig
+- Kamera bleibt nah, aber mit spuerbarer Eigenbewegung, nicht statisch-traege
+- Natuerliche, zuegige Mimik: schnelles Blinzeln, spontanes Laecheln, aktive Praesenz`,
+  `- Editorial/Hochglanz-Stil, SELBSTBEWUSSTES Tempo: entschlossene, zielgerichtete Kamerafahrt
+- Klare, spuerbare Bewegung wie in einer Kampagne - nicht traege, sondern praezise und zuegig
+- Kuehleres Licht, klare Konturen, Bewegung wirkt bewusst und schnell, nicht meditativ-langsam`,
 ];
 
 function pickRandomTrendStyle() {
