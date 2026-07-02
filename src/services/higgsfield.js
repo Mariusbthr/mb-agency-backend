@@ -34,11 +34,13 @@ async function submitRequest(imageUrl, prompt) {
   }
 
   const data = await response.json();
+  console.log('[Higgsfield Debug] submitRequest Antwort:', JSON.stringify(data));
   return data.request_id;
 }
 
 async function pollStatus(requestId, { intervalMs = 5000, timeoutMs = 5 * 60 * 1000 } = {}) {
   const start = Date.now();
+  let pollCount = 0;
   while (Date.now() - start < timeoutMs) {
     const response = await fetch(`${HIGGSFIELD_BASE_URL}/requests/${requestId}/status`, {
       headers: { Authorization: getAuthHeader() },
@@ -48,6 +50,11 @@ async function pollStatus(requestId, { intervalMs = 5000, timeoutMs = 5 * 60 * 1
       throw new Error(`Higgsfield pollStatus Fehler: ${response.status} ${text}`);
     }
     const data = await response.json();
+
+    pollCount++;
+    if (pollCount === 1 || pollCount % 6 === 0) {
+      console.log(`[Higgsfield Debug] Poll #${pollCount} fuer ${requestId}:`, JSON.stringify(data));
+    }
 
     if (data.status === 'completed') {
       return data.video?.url;
