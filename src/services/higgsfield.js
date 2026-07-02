@@ -25,6 +25,7 @@ async function submitRequest(imageUrl, prompt) {
       image_url: imageUrl,
       aspect_ratio: '9:16',
       resolution: '720p',
+      motion_strength: 0.9,
     }),
   });
 
