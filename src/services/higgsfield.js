@@ -38,7 +38,7 @@ async function submitRequest(imageUrl, prompt) {
   return data.request_id;
 }
 
-async function pollStatus(requestId, { intervalMs = 5000, timeoutMs = 5 * 60 * 1000 } = {}) {
+async function pollStatus(requestId, { intervalMs = 5000, timeoutMs = 12 * 60 * 1000 } = {}) {
   const start = Date.now();
   let pollCount = 0;
   while (Date.now() - start < timeoutMs) {
@@ -52,7 +52,7 @@ async function pollStatus(requestId, { intervalMs = 5000, timeoutMs = 5 * 60 * 1
     const data = await response.json();
 
     pollCount++;
-    if (pollCount === 1 || pollCount % 6 === 0) {
+    if (pollCount === 1 || pollCount % 12 === 0) {
       console.log(`[Higgsfield Debug] Poll #${pollCount} fuer ${requestId}:`, JSON.stringify(data));
     }
 
