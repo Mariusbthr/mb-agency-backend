@@ -3,7 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const { v4: uuid } = require('uuid');
 const db = require('../db');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, requireOwner } = require('../middleware/auth');
 const { generateReelConcept } = require('../services/claude');
 const { generateVideo } = require('../services/higgsfield');
 
@@ -89,8 +89,33 @@ router.get('/:creatorId/:reelId/download', requireAuth, (req, res) => {
   if (!reel || reel.status !== 'DONE' || !reel.file_path) {
     return res.status(404).json({ error: 'Reel noch nicht fertig oder nicht gefunden.' });
   }
+  db.prepare(`UPDATE reels SET downloaded = 1 WHERE id = ?`).run(reel.id);
   const fullPath = path.join(UPLOAD_ROOT, reel.file_path);
   res.download(fullPath);
+});
+
+router.patch('/:creatorId/:reelId/downloaded', requireAuth, (req, res) => {
+  const { downloaded } = req.body;
+  const reel = db.prepare(`SELECT * FROM reels WHERE id = ? AND creator_id = ?`).get(req.params.reelId, req.params.creatorId);
+  if (!reel) return res.status(404).json({ error: 'Reel nicht gefunden.' });
+
+  db.prepare(`UPDATE reels SET downloaded = ? WHERE id = ?`).run(downloaded ? 1 : 0, reel.id);
+  res.json({ ok: true, downloaded: Boolean(downloaded) });
+});
+
+router.delete('/:creatorId/:reelId', requireAuth, requireOwner, (req, res) => {
+  const reel = db.prepare(`SELECT * FROM reels WHERE id = ? AND creator_id = ?`).get(req.params.reelId, req.params.creatorId);
+  if (!reel) return res.status(404).json({ error: 'Reel nicht gefunden.' });
+
+  if (reel.file_path) {
+    const fullPath = path.join(UPLOAD_ROOT, reel.file_path);
+    fs.unlink(fullPath, (err) => {
+      if (err && err.code !== 'ENOENT') console.error('Konnte Reel-Datei nicht loeschen:', err);
+    });
+  }
+
+  db.prepare(`DELETE FROM reels WHERE id = ?`).run(reel.id);
+  res.json({ ok: true });
 });
 
 module.exports = router;
