@@ -79,9 +79,10 @@ router.get('/:creatorId', requireAuth, (req, res) => {
   const reels = db
     .prepare(
       `SELECT reels.*, motion_videos.file_path AS motion_video_path, motion_videos.name AS motion_video_name,
-              motion_videos.style_tag AS motion_video_style
+              motion_videos.style_tag AS motion_video_style, images.file_path AS source_image_path
        FROM reels
        LEFT JOIN motion_videos ON motion_videos.id = reels.motion_video_id
+       LEFT JOIN images ON images.id = reels.source_image_id
        WHERE reels.creator_id = ?
        ORDER BY reels.created_at DESC`
     )
