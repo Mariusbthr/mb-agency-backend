@@ -4,56 +4,53 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 
 /**
- * Fragt Claude nach einem kurzen, plattformkonformen Reel-Konzept
- * (Kamerabewegung, Stimmung, Schnitttempo - KEIN Text-Overlay) basierend
- * auf einem Trend-Kontext.
- * Wichtig: Erzeugt bewusst NICHT-explizite, plattformkonforme Konzepte.
+ * Fragt Claude (mit Web-Suche) nach aktuellen viralen Short-Form-Trends im
+ * weiblichen Creator-Bereich und liefert daraus eine Liste strukturierter
+ * "Reel-Rezepte" (Stil, Sound-Art, Hook-Idee, Schnitttempo). Diese werden
+ * regelmaessig (manuell per Button oder spaeter per Cron-Job) neu abgerufen,
+ * damit der Content aktuell bleibt - siehe trend_recipes Tabelle.
  *
- * @param {string} trendContext - kurze Beschreibung aktueller Trends (siehe reels.js fuer Default)
- * @param {string} creatorName - Name des Creators, fuer Kontext
- * @returns {Promise<string>} - fertiger Prompt-Text fuer Higgsfield
+ * Wichtig: Ersetzt die fruehere generateReelConcept()-Funktion, die einen
+ * Higgsfield-Image-to-Video-Prompt erzeugt hat. Diese wird nicht mehr
+ * gebraucht, weil die Videoerzeugung jetzt manuell per Face-Swap in
+ * Higgsfields Web-Oberflaeche passiert (siehe reels.js).
+ *
+ * @returns {Promise<Array<{styleName: string, description: string, audioSuggestion: string, hookSuggestion: string, cutPace: string}>>}
  */
-async function generateReelConcept(trendContext, creatorName) {
+async function refreshTrendRecipes() {
   if (!ANTHROPIC_API_KEY) {
     throw new Error('ANTHROPIC_API_KEY ist nicht gesetzt. Bitte in .env eintragen.');
   }
 
-  const systemPrompt = `Du hilfst einer Social-Media-Agentur dabei, aus einem Bild eines Creators ein
-kurzes, plattformkonformes Instagram/TikTok-Reel-Konzept fuer ein Image-to-Video-Tool zu erstellen.
+  const systemPrompt = `Du recherchierst fuer eine Social-Media-Agentur aktuelle virale
+Short-Form-Content-Trends (Instagram Reels / TikTok) speziell in der weiblichen
+Content-Creator-Szene. Die Agentur nutzt einen manuellen Face-Swap-Workflow: ein
+Mitarbeiter setzt das Gesicht einer Creatorin auf ein bereits vorhandenes,
+dynamisches Bewegungs-Video (Tanzen, Laufen, GRWM, Transitions etc.).
+
+Deine Aufgabe: Recherchiere per Websuche die AKTUELL (diese Woche/diesen Monat)
+angesagten Formate und liefere 5 klar UNTERSCHIEDLICHE Reel-Rezepte, die sich in
+Stil, Tempo und Bewegungsart unterscheiden (z.B. nicht alle "ruhig", nicht alle
+"GRWM") - Abwechslung ist fuer den Auftraggeber ausdruecklich Pflicht.
 
 Wichtige Regeln:
-- Kein sexueller oder stark sexualisierter Inhalt.
-- KEIN Text-Overlay im Video anfordern - aktuelle KI-Video-Modelle koennen Text nicht
-  zuverlaessig sauber rendern, das fuehrt zu unlesbarem/verzerrtem Text im Bild.
-  Text-Overlays werden spaeter separat in der Videobearbeitung hinzugefuegt, nicht hier.
-- NUR einfache, physikalisch plausible Bewegungen anfordern (z.B. Kopfdrehen, Blinzeln,
-  Laecheln, Kamerafahrt, Haare/Stoff die sich bewegen) - das TEMPO dieser Bewegungen darf
-  aber je nach vorgegebenem Trend-Stil stark variieren (ruhig UND zuegig/energiegeladen sind
-  beide erlaubt, "physikalisch plausibel" heisst NICHT automatisch "langsam").
-  KEINE komplexen Handlungen (z.B. "steht auf", "faehrt mit dem Stuhl", "geht durch den Raum")
-  anfordern - das fuehrt bei aktuellen Video-Modellen zuverlaessig zu unlogischen,
-  unrealistisch wirkenden Ergebnissen. Das gilt unabhaengig vom Tempo.
-- Orientiere dich an den mitgegebenen aktuellen Trend-Mustern (siehe Trend-Kontext), aber
-  uebersetze sie in reine Bild-Bewegung, nicht in Handlung.
-- Antworte NUR mit dem fertigen Prompt-Text fuer das Image-to-Video-Tool, keine Erklaerungen,
-  keine Anfuehrungszeichen drumherum.`;
+- Nicht sexuell/explizit, plattformkonform fuer Instagram/TikTok.
+- Jedes Rezept muss zu einem GEFILMTEN Bewegungs-Video passen (also eine
+  Bewegungsart beschreiben, die man tatsaechlich als Vorlage aufnehmen/lizenzieren
+  kann), nicht zu einer KI-generierten Kamerafahrt auf einem Standbild.
+- Antworte NUR mit einem JSON-Array, keine Erklaerung davor oder danach, kein
+  Markdown-Codeblock. Format pro Eintrag:
+  {"styleName": "...", "description": "...", "audioSuggestion": "...", "hookSuggestion": "...", "cutPace": "..."}
+  - styleName: kurzer Name (z.B. "Street-Style Walk", "Fast Transition GRWM")
+  - description: 1-2 Saetze, welche Bewegung/Aesthetik das Bewegungs-Video zeigen soll
+  - audioSuggestion: welche Art von Sound/Audio-Trend gerade dazu passt (Art, nicht ein
+    bestimmter urheberrechtlich geschuetzter Songtitel)
+  - hookSuggestion: kurze Idee fuer den Text-Hook/erste Sekunde, um Aufmerksamkeit zu wecken
+  - cutPace: Schnitttempo, z.B. "sehr schnell, unter 1s pro Szene" oder "ruhig, wenige Schnitte"`;
 
-  const userPrompt = `Creator: ${creatorName}
-Aktuelle Trend-Muster (Juli 2026, Instagram/TikTok, weibliche Creator):
-${trendContext}
-
-Erstelle einen kurzen, praezisen englischen Prompt (max. 2-3 Saetze) fuer ein
-Image-to-Video-Tool, GENAU im Tempo/Stil des obigen Trend-Musters.
-
-WICHTIG - nutze aktiv diese Steuerung (laut Tool-Doku entscheidend fuers Ergebnis):
-- Tempo-Wort einbauen je nach Trend oben: "slowly" / "smoothly" (ruhig) ODER
-  "quickly" / "energetically" / "dynamically" (zuegig). Erzwinge NICHT automatisch "slowly".
-- Konkrete Kamerabewegung nennen und variieren: z.B. "camera pans left", "zooms in",
-  "orbits around", "quick push-in" - waehle passend zum Trend, nicht immer dieselbe.
-- Eine natuerliche Bewegung der Person passend zum Tempo (kein Text-Overlay, keine
-  komplexe Handlung wie aufstehen/gehen).
-
-Antworte NUR mit dem fertigen englischen Prompt, ohne Anfuehrungszeichen, ohne Erklaerung.`;
+  const userPrompt = `Recherchiere jetzt per Websuche aktuelle virale Instagram/TikTok
+Short-Form-Trends fuer weibliche Content-Creator (Stand: heute) und liefere die 5
+Reel-Rezepte als reines JSON-Array gemaess der Vorgaben oben.`;
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -64,9 +61,10 @@ Antworte NUR mit dem fertigen englischen Prompt, ohne Anfuehrungszeichen, ohne E
     },
     body: JSON.stringify({
       model: ANTHROPIC_MODEL,
-      max_tokens: 300,
+      max_tokens: 2000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
+      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 8 }],
     }),
   });
 
@@ -76,8 +74,22 @@ Antworte NUR mit dem fertigen englischen Prompt, ohne Anfuehrungszeichen, ohne E
   }
 
   const data = await response.json();
-  const textBlock = data.content.find((block) => block.type === 'text');
-  return textBlock ? textBlock.text.trim() : '';
+  const combinedText = data.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+
+  const start = combinedText.indexOf('[');
+  const end = combinedText.lastIndexOf(']');
+  if (start === -1 || end === -1 || end < start) {
+    throw new Error('Konnte keine Trend-Rezepte aus der Claude-Antwort lesen: ' + combinedText.slice(0, 500));
+  }
+
+  const recipes = JSON.parse(combinedText.slice(start, end + 1));
+  if (!Array.isArray(recipes) || recipes.length === 0) {
+    throw new Error('Claude hat keine gueltige Rezept-Liste geliefert.');
+  }
+  return recipes;
 }
 
-module.exports = { generateReelConcept };
+module.exports = { refreshTrendRecipes };

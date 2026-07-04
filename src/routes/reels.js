@@ -1,44 +1,47 @@
 const express = require('express');
+const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuid } = require('uuid');
 const db = require('../db');
 const { requireAuth, requireOwner } = require('../middleware/auth');
-const { generateReelConcept } = require('../services/claude');
-const { generateVideo } = require('../services/higgsfield');
 
 const router = express.Router();
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..');
 const UPLOAD_ROOT = path.join(DATA_DIR, 'uploads');
 
-// Mehrere Trend-Stile, zwischen denen automatisch abgewechselt wird. Wichtig:
-// Diese unterscheiden sich nicht nur im Licht/Look, sondern bewusst auch im
-// TEMPO der Bewegung - sonst wirken alle Reels trotz Zufallsauswahl gleich "slow motion".
-// WICHTIG: Diese Liste sollte alle paar Wochen manuell aktualisiert werden, damit
-// sie echte aktuelle Trends widerspiegelt (siehe Erklaerung im Chat).
-const TREND_STYLES = [
-  `- POV/erste-Person-Gefuehl, MITTLERES Tempo: Kamera wirkt wie die eigenen Augen der Person
-- Spuerbare, aber kontrollierte Kamerabewegung (kein Zeitlupen-Gefuehl, aber auch nicht hektisch)
-- Subtile Kamera-Drift mit klar wahrnehmbarem Vorwaertstempo`,
-  `- Energiegeladener Trend-Stil, SCHNELLES Tempo: knackige, zuegige Bewegung, kein traeges Driften
-- Schneller Zoom oder leichter Handheld-Wackler, wie ein spontan eingefangener Moment
-- Zuegiger Haarschwung oder schnelles Kopfdrehen, Energie und Tempo klar spuerbar - explizit KEINE Zeitlupe`,
-  `- GRWM-Stil (Get Ready With Me), MITTLERES bis ZUEGIGES Tempo: nahbar, direkt, lebendig
-- Kamera bleibt nah, aber mit spuerbarer Eigenbewegung, nicht statisch-traege
-- Natuerliche, zuegige Mimik: schnelles Blinzeln, spontanes Laecheln, aktive Praesenz`,
-  `- Editorial/Hochglanz-Stil, SELBSTBEWUSSTES Tempo: entschlossene, zielgerichtete Kamerafahrt
-- Klare, spuerbare Bewegung wie in einer Kampagne - nicht traege, sondern praezise und zuegig
-- Kuehleres Licht, klare Konturen, Bewegung wirkt bewusst und schnell, nicht meditativ-langsam`,
-];
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200 MB pro fertigem Reel
+  fileFilter: (req, file, cb) => {
+    if (!file.mimetype.startsWith('video/')) {
+      return cb(new Error('Nur Videodateien sind erlaubt.'));
+    }
+    cb(null, true);
+  },
+});
 
-function pickRandomTrendStyle() {
-  return TREND_STYLES[Math.floor(Math.random() * TREND_STYLES.length)];
+function formatRecipeText(recipe) {
+  if (!recipe) return null;
+  return [
+    `Stil: ${recipe.style_name}`,
+    recipe.description,
+    recipe.audio_suggestion ? `Sound-Idee: ${recipe.audio_suggestion}` : null,
+    recipe.hook_suggestion ? `Hook: ${recipe.hook_suggestion}` : null,
+    recipe.cut_pace ? `Schnitttempo: ${recipe.cut_pace}` : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
 }
 
-// Reel aus einem Bild generieren
-router.post('/:creatorId/generate', requireAuth, async (req, res) => {
+// Ein Reel "anlegen": weist dem Quellbild ein zufaelliges Bewegungs-Video +
+// ein aktuelles Trend-Rezept zu. Der eigentliche Face-Swap passiert danach
+// manuell in Higgsfields Web-Oberflaeche - siehe Uebergabe-Dokument, Abschnitt
+// "Hybrid-Workflow". Deshalb ist das hier (anders als frueher mit Higgsfields
+// Image-to-Video-API) ein schneller, synchroner Vorgang ohne Wartezeit.
+router.post('/:creatorId/assign', requireAuth, (req, res) => {
   const { creatorId } = req.params;
-  const { imageId, trendContext } = req.body;
+  const { imageId } = req.body;
 
   const creator = db.prepare(`SELECT * FROM creators WHERE id = ?`).get(creatorId);
   if (!creator) return res.status(404).json({ error: 'Creator-Ordner nicht gefunden.' });
@@ -46,52 +49,67 @@ router.post('/:creatorId/generate', requireAuth, async (req, res) => {
   const image = db.prepare(`SELECT * FROM images WHERE id = ? AND creator_id = ?`).get(imageId, creatorId);
   if (!image) return res.status(404).json({ error: 'Bild nicht gefunden.' });
 
-  const reelId = uuid();
-  db.prepare(
-    `INSERT INTO reels (id, creator_id, source_image_id, requested_by, status) VALUES (?, ?, ?, ?, 'GENERATING')`
-  ).run(reelId, creatorId, imageId, req.user.id);
-
-  // Direkt antworten, Generierung laeuft im Hintergrund weiter (kann 1-3 Minuten dauern)
-  res.json({ id: reelId, status: 'GENERATING' });
-
-  try {
-    const prompt = await generateReelConcept(
-      trendContext || pickRandomTrendStyle(),
-      creator.name
-    );
-
-    // Higgsfield braucht eine oeffentlich erreichbare Bild-URL, keinen Datei-Upload.
-    // PUBLIC_BASE_URL muss auf deine Render-Adresse zeigen, z.B. https://mb-agency-backend.onrender.com
-    const publicBaseUrl = process.env.PUBLIC_BASE_URL;
-    if (!publicBaseUrl) {
-      throw new Error('PUBLIC_BASE_URL ist nicht gesetzt. Bitte in den Environment Variables eintragen.');
-    }
-    const imageUrl = `${publicBaseUrl.replace(/\/$/, '')}/files/${image.file_path}`;
-
-    const reelDir = path.join(UPLOAD_ROOT, creatorId, 'reels');
-    fs.mkdirSync(reelDir, { recursive: true });
-    const destPath = path.join(reelDir, `${Date.now()}-${reelId}.mp4`);
-
-    await generateVideo(imageUrl, prompt, destPath);
-
-    const relativePath = path.relative(UPLOAD_ROOT, destPath);
-    db.prepare(
-      `UPDATE reels SET status = 'DONE', prompt_used = ?, file_path = ?, completed_at = datetime('now') WHERE id = ?`
-    ).run(prompt, relativePath, reelId);
-  } catch (err) {
-    db.prepare(
-      `UPDATE reels SET status = 'FAILED', error_message = ? WHERE id = ?`
-    ).run(String(err.message || err), reelId);
-    console.error('Reel-Generierung fehlgeschlagen:', err);
+  const motionVideo = db
+    .prepare(`SELECT * FROM motion_videos ORDER BY RANDOM() LIMIT 1`)
+    .get();
+  if (!motionVideo) {
+    return res.status(400).json({
+      error: 'Noch kein Bewegungs-Video in der Bibliothek. Bitte zuerst unter "Bewegungs-Videos" eins hochladen.',
+    });
   }
+
+  const recipe = db
+    .prepare(`SELECT * FROM trend_recipes WHERE active = 1 ORDER BY RANDOM() LIMIT 1`)
+    .get();
+
+  const reelId = uuid();
+  const recipeSnapshot = formatRecipeText(recipe);
+  db.prepare(
+    `INSERT INTO reels (id, creator_id, source_image_id, requested_by, status, motion_video_id, recipe_snapshot)
+     VALUES (?, ?, ?, ?, 'ASSIGNED', ?, ?)`
+  ).run(reelId, creatorId, imageId, req.user.id, motionVideo.id, recipeSnapshot);
+
+  const reel = db.prepare(`SELECT * FROM reels WHERE id = ?`).get(reelId);
+  res.json({ ...reel, motionVideo });
 });
 
-// Alle Reels eines Creators auflisten (neueste zuerst), inkl. Zeitstempel
+// Alle Reels eines Creators auflisten (neueste zuerst), inkl. zugewiesenem
+// Bewegungs-Video fuer die Anzeige im Dashboard
 router.get('/:creatorId', requireAuth, (req, res) => {
   const reels = db
-    .prepare(`SELECT * FROM reels WHERE creator_id = ? ORDER BY created_at DESC`)
+    .prepare(
+      `SELECT reels.*, motion_videos.file_path AS motion_video_path, motion_videos.name AS motion_video_name,
+              motion_videos.style_tag AS motion_video_style
+       FROM reels
+       LEFT JOIN motion_videos ON motion_videos.id = reels.motion_video_id
+       WHERE reels.creator_id = ?
+       ORDER BY reels.created_at DESC`
+    )
     .all(req.params.creatorId);
   res.json(reels);
+});
+
+// Fertigen, manuell per Face-Swap erstellten Reel-Clip hochladen
+router.post('/:creatorId/:reelId/upload', requireAuth, upload.single('video'), (req, res) => {
+  const reel = db
+    .prepare(`SELECT * FROM reels WHERE id = ? AND creator_id = ?`)
+    .get(req.params.reelId, req.params.creatorId);
+  if (!reel) return res.status(404).json({ error: 'Reel nicht gefunden.' });
+  if (!req.file) return res.status(400).json({ error: 'Kein Video erhalten.' });
+
+  const reelDir = path.join(UPLOAD_ROOT, req.params.creatorId, 'reels');
+  fs.mkdirSync(reelDir, { recursive: true });
+  const ext = path.extname(req.file.originalname) || '.mp4';
+  const destPath = path.join(reelDir, `${Date.now()}-${reel.id}${ext}`);
+  fs.writeFileSync(destPath, req.file.buffer);
+
+  const relativePath = path.relative(UPLOAD_ROOT, destPath);
+  db.prepare(
+    `UPDATE reels SET status = 'DONE', file_path = ?, completed_at = datetime('now') WHERE id = ?`
+  ).run(relativePath, reel.id);
+
+  const updated = db.prepare(`SELECT * FROM reels WHERE id = ?`).get(reel.id);
+  res.json(updated);
 });
 
 // Einzelnes Reel-Video herunterladen

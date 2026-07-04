@@ -1,7 +1,7 @@
 {
   "name": "mb-agency-backend",
   "version": "1.0.0",
-  "description": "MB Agency - Backend fuer Creator-Reel-Generator (Higgsfield + Claude)",
+  "description": "MB Agency - Backend fuer Creator-Reel-Generator (manueller Higgsfield-Face-Swap + Claude-Trendrecherche)",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
